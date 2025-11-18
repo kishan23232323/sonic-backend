@@ -1,0 +1,449 @@
+
+
+===== ./.env =====
+
+# Server
+NODE_ENV=development
+PORT=5000
+API_VERSION=v1
+
+# Database
+MONGODB_URI=mongodb://localhost:27017/sonic-dex
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# JWT
+JWT_SECRET=your-super-secret-jwt-key-change-this-in-production
+JWT_EXPIRES_IN=7d
+
+# CORS
+FRONTEND_URL=http://localhost:3000
+
+# Blockchain RPCs (Multi-chain)
+ETHEREUM_RPC=https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY
+BSC_RPC=https://bsc-dataseed.binance.org
+POLYGON_RPC=https://polygon-rpc.com
+AVALANCHE_RPC=https://api.avax.network/ext/bc/C/rpc
+ARBITRUM_RPC=https://arb1.arbitrum.io/rpc
+
+# External APIs
+COINGECKO_API_KEY=
+RUBIC_API_KEY=
+
+# WebSocket
+WS_PORT=5001
+
+===== ./package.json =====
+
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon --exec ts-node src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "lint": "eslint . --ext .ts",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "bull": "^4.16.5",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "ethers": "^6.15.0",
+    "express": "^5.1.0",
+    "ioredis": "^5.8.2",
+    "joi": "^18.0.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.19.3",
+    "redis": "^5.9.0",
+    "socket.io": "^4.8.1",
+    "winston": "^3.18.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/ioredis": "^4.28.10",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.3",
+    "@typescript-eslint/parser": "^8.46.3",
+    "eslint": "^9.39.1",
+    "nodemon": "^3.1.10",
+    "prettier": "^3.6.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
+
+
+===== ./project_code.txt =====
+
+
+
+===== ./server.js =====
+
+import app from './app';
+import { config } from './config';
+
+const PORT = config.port;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+
+===== ./src/api/middleware/core.middleware.ts =====
+
+import cors from 'cors';
+import { config } from '../../config';
+
+export const corsMiddleware = cors({
+  origin: config.cors.origin,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+});
+
+===== ./src/api/middleware/error.middleware.ts =====
+
+import { Request, Response, NextFunction } from 'express';
+import { AppError } from '../../../utils/error.util';
+import logger from '../../utils/logger.util';
+
+export const errorHandler = (
+  err: Error,
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  if (err instanceof AppError) {
+    logger.error(`${err.statusCode} - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
+    
+    return res.status(err.statusCode).json({
+      success: false,
+      error: err.message,
+    });
+  }
+
+  logger.error(`500 - ${err.message} - ${req.originalUrl} - ${req.method} - ${req.ip}`);
+  logger.error(err.stack);
+
+  return res.status(500).json({
+    success: false,
+    error: 'Internal server error',
+  });
+};
+
+===== ./src/app.ts =====
+
+import express, { Application } from 'express';
+import { corsMiddleware } from './api/middleware/core.middleware';
+import { errorHandler } from './api/middleware/error.middleware';
+
+const app: Application = express();
+
+// Middlewares
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(corsMiddleware);
+
+// Health check
+app.get('/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Routes will be added here
+
+// Error handling
+app.use(errorHandler);
+
+export default app;
+
+===== ./src/config/chain.ts =====
+
+import { ChainId } from '../types/common.types';
+
+export interface ChainConfig {
+  chainId: ChainId;
+  name: string;
+  rpcUrl: string;
+  symbol: string;
+  blockExplorer: string;
+}
+
+export const chainConfigs: Record<ChainId, ChainConfig> = {
+  [ChainId.ETHEREUM]: {
+    chainId: ChainId.ETHEREUM,
+    name: 'Ethereum',
+    rpcUrl: process.env.ETHEREUM_RPC || 'https://eth.llamarpc.com',
+    symbol: 'ETH',
+    blockExplorer: 'https://etherscan.io',
+  },
+  [ChainId.BSC]: {
+    chainId: ChainId.BSC,
+    name: 'BNB Smart Chain',
+    rpcUrl: process.env.BSC_RPC || 'https://bsc-dataseed.binance.org',
+    symbol: 'BNB',
+    blockExplorer: 'https://bscscan.com',
+  },
+  [ChainId.POLYGON]: {
+    chainId: ChainId.POLYGON,
+    name: 'Polygon',
+    rpcUrl: process.env.POLYGON_RPC || 'https://polygon-rpc.com',
+    symbol: 'MATIC',
+    blockExplorer: 'https://polygonscan.com',
+  },
+  [ChainId.AVALANCHE]: {
+    chainId: ChainId.AVALANCHE,
+    name: 'Avalanche',
+    rpcUrl: process.env.AVALANCHE_RPC || 'https://api.avax.network/ext/bc/C/rpc',
+    symbol: 'AVAX',
+    blockExplorer: 'https://snowtrace.io',
+  },
+  [ChainId.ARBITRUM]: {
+    chainId: ChainId.ARBITRUM,
+    name: 'Arbitrum',
+    rpcUrl: process.env.ARBITRUM_RPC || 'https://arb1.arbitrum.io/rpc',
+    symbol: 'ETH',
+    blockExplorer: 'https://arbiscan.io',
+  },
+};
+
+===== ./src/config/index.ts =====
+
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+export const config = {
+  env: process.env.NODE_ENV || 'development',
+  port: parseInt(process.env.PORT || '5000', 10),
+  apiVersion: process.env.API_VERSION || 'v1',
+
+  mongodb: {
+    uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/sonic-dex',
+  },
+
+  redis: {
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD || undefined,
+  },
+
+  jwt: {
+    secret: process.env.JWT_SECRET || 'change-this-secret',
+    expiresIn: process.env.JWT_EXPIRES_IN || '7d',
+  },
+
+  cors: {
+    origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  },
+
+  websocket: {
+    port: parseInt(process.env.WS_PORT || '5001', 10),
+  },
+};
+
+===== ./src/types/common.types.ts =====
+
+export enum ChainId {
+  ETHEREUM = 1,
+  BSC = 56,
+  POLYGON = 137,
+  AVALANCHE = 43114,
+  ARBITRUM = 42161,
+}
+
+export interface ApiResponse<T = any> {
+  success: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}
+
+export interface PaginationParams {
+  page: number;
+  limit: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+}
+
+===== ./src/types/swap.types.ts =====
+
+import { ChainId } from './common.types';
+
+export interface SwapTransaction {
+  txHash: string;
+  userAddress: string;
+  fromToken: string;
+  toToken: string;
+  fromAmount: string;
+  toAmount: string;
+  chainId: ChainId;
+  status: SwapStatus;
+  timestamp: Date;
+  gasUsed?: string;
+  gasPrice?: string;
+}
+
+export enum SwapStatus {
+  PENDING = 'pending',
+  CONFIRMED = 'confirmed',
+  FAILED = 'failed',
+}
+
+export interface SwapHistoryQuery {
+  userAddress: string;
+  chainId?: ChainId;
+  page?: number;
+  limit?: number;
+}
+
+===== ./src/types/token.types.ts =====
+
+import { ChainId } from './common.types';
+
+export interface Token {
+  address: string;
+  symbol: string;
+  name: string;
+  decimals: number;
+  chainId: ChainId;
+  logoURI?: string;
+  priceUSD?: number;
+}
+
+export interface TokenPrice {
+  address: string;
+  chainId: ChainId;
+  priceUSD: number;
+  priceChange24h?: number;
+  lastUpdated: Date;
+}
+
+===== ./src/types/user.types.ts =====
+
+
+
+===== ./tsconfig.json =====
+
+{
+  "compilerOptions": {
+
+    "target": "ES2020",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+
+    
+    "lib": ["ES2020"],
+
+
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+
+    
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+
+    
+    "ignoreDeprecations": true
+  },
+  "include": ["src/**/*", "src/app.ts"],
+  "exclude": ["node_modules", "dist", "tests"]
+}
+
+
+===== ./utils/error.util.ts =====
+
+import winston from 'winston';
+import { config } from '../src/config';
+
+const logFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.errors({ stack: true }),
+  winston.format.splat(),
+  winston.format.json()
+);
+
+const logger = winston.createLogger({
+  level: config.env === 'development' ? 'debug' : 'info',
+  format: logFormat,
+  transports: [
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'logs/combined.log' }),
+  ],
+});
+
+if (config.env === 'development') {
+  logger.add(
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    })
+  );
+}
+
+export default logger;
+
+===== ./utils/logger.util.ts =====
+
+import winston from 'winston';
+import { config } from '../src/config';
+
+
+const logFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.errors({ stack: true }),
+  winston.format.splat(),
+  winston.format.json()
+);
+
+const logger = winston.createLogger({
+  level: config.env === 'development' ? 'debug' : 'info',
+  format: logFormat,
+  transports: [
+    new winston.transports.File({ filename: 'logs/error.log', level: 'error' }),
+    new winston.transports.File({ filename: 'logs/combined.log' }),
+  ],
+});
+
+if (config.env === 'development') {
+  logger.add(
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    })
+  );
+}
+
+export default logger;
