@@ -220,13 +220,11 @@ const confirmBuyOrder = asyncHandler(async (req, res) => {
         throw new ApiError(400, "order id is required");
     }
     let proofUrl = null;
-    if (req.file) {
         if(!req.file){
             throw new ApiError(400, "Proof image is required");
         }
-        const upload = await uploadOnCloudinary(req.file.buffer);
-        proofUrl = upload.secure_url;
-    }
+    const upload = await uploadOnCloudinary(req.file.buffer);
+    proofUrl = upload.secure_url;
     const order = await P2PTransaction.findById(orderId);
     if (!order) {
         throw new ApiError(404, "Order not found");
