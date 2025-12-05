@@ -11,14 +11,14 @@ const validateReceiverDetails = (paymentMethod, receiverDetails) => {
             throw new ApiError(400, "Bank details are required");
         }
         return { bankAccountNumber, bankSwiftCode, bankHolderName };
-    } 
+    }
     else if (paymentMethod === "UPI") {
         const { upiId } = receiverDetails;
         if (!upiId) {
             throw new ApiError(400, "UPI ID is required");
         }
         return { upiId };
-    } 
+    }
     else if (paymentMethod === "PAYPAL") {
         const { paypalId } = receiverDetails;
         if (!paypalId) {
@@ -30,27 +30,27 @@ const validateReceiverDetails = (paymentMethod, receiverDetails) => {
 };
 
 const cleanupOldTransactions = async (userId) => {
-   
+
     const userTx = await P2PTransaction.find({ userId })
         .sort({ createdAt: -1 });
 
-    
+
     if (userTx.length > 10) {
-        const deleteItems = userTx.slice(10); 
+        const deleteItems = userTx.slice(10);
         await P2PTransaction.deleteMany({
             _id: { $in: deleteItems.map(tx => tx._id) }
         });
     }
 };
 
-const getAdminAddress = () =>{
-     const walletList = process.env.P2P_ADMIN_WALLETS?.split(",") || [];
+const getAdminAddress = () => {
+    const walletList = process.env.P2P_ADMIN_WALLETS?.split(",") || [];
 
     if (walletList.length === 0) {
         throw new Error("Admin TRC20 wallet list not configured");
     }
 
-   
+
     const randomIndex = Math.floor(Math.random() * walletList.length);
 
     return walletList[randomIndex];
@@ -71,7 +71,7 @@ const getAdminPaymentDetails = (paymentMethod) => {
         }
     }
 
-    
+
     if (paymentMethod === "UPI") {
         const upiList = process.env.P2P_ADMIN_UPI_IDS?.split(",") || [];
         if (upiList.length === 0) throw new Error("UPI list empty");
@@ -92,7 +92,7 @@ const getAdminPaymentDetails = (paymentMethod) => {
 };
 
 
- const getFiatPairs = asyncHandler(async (req, res) => {
+const getFiatPairs = asyncHandler(async (req, res) => {
     const fiatPairs = [
         { country: "India", currency: "INR", pair: "INR/USDT" },
         { country: "United States", currency: "USD", pair: "USD/USDT" },
@@ -157,11 +157,11 @@ const createSellOrder = asyncHandler(async (req, res) => {
 });
 
 const createBuyOrder = asyncHandler(async (req, res) => {
-    const { usdtAmount, fiatAmount, paymentMethod, country,usdtWalletAddress } = req.body;
+    const { usdtAmount, fiatAmount, paymentMethod, country, usdtWalletAddress } = req.body;
     if (!usdtAmount || !fiatAmount || !paymentMethod || !country || !usdtWalletAddress) {
         throw new ApiError(400, "All fields are required");
     }
-     const paymentDetails = getAdminPaymentDetails(paymentMethod); 
+    const paymentDetails = getAdminPaymentDetails(paymentMethod);
     const newTx = await P2PTransaction.create({
         userId: req.user._id,
         type: "BUY",
@@ -173,7 +173,7 @@ const createBuyOrder = asyncHandler(async (req, res) => {
         usdtWalletAddress,
         status: "PENDING"
     });
-   
+
     await cleanupOldTransactions(req.user._id);
     return res.status(201).json(
         new ApiResponse(201, {
@@ -206,7 +206,7 @@ const confirmSellOrder = asyncHandler(async (req, res) => {
     order.proofImage = proofUrl;
     order.txnHash = txnHash;
     order.status = "AWAITING_CONFIRMATION";
-     await order.save({ validateBeforeSave: false });
+    await order.save({ validateBeforeSave: false });
     return res.status(200).json(
         new ApiResponse(200, {
             order
@@ -220,13 +220,11 @@ const confirmBuyOrder = asyncHandler(async (req, res) => {
         throw new ApiError(400, "order id is required");
     }
     let proofUrl = null;
-    if (req.file) {
-        if(!req.file){
-            throw new ApiError(400, "Proof image is required");
-        }
-        const upload = await uploadOnCloudinary(req.file.buffer);
-        proofUrl = upload.secure_url;
+    if (!req.file) {
+        throw new ApiError(400, "Proof image is required");
     }
+    const upload = await uploadOnCloudinary(req.file.buffer);
+    proofUrl = upload.secure_url;
     const order = await P2PTransaction.findById(orderId);
     if (!order) {
         throw new ApiError(404, "Order not found");
@@ -236,7 +234,7 @@ const confirmBuyOrder = asyncHandler(async (req, res) => {
     }
     order.proofImage = proofUrl;
     order.status = "AWAITING_CONFIRMATION";
-   await order.save({ validateBeforeSave: false });
+    await order.save({ validateBeforeSave: false });
     return res.status(200).json(
         new ApiResponse(200, {
             order
@@ -341,9 +339,9 @@ export {
     createSellOrder,
     getFiatPairs,
     createBuyOrder,
-    confirmSellOrder, 
-    confirmBuyOrder, 
-    getPendingOrders, 
+    confirmSellOrder,
+    confirmBuyOrder,
+    getPendingOrders,
     adminApproveOrder,
     adminRejectOrder,
     getAllOrders,

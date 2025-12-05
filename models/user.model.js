@@ -1,73 +1,78 @@
-import mongoose, { Schema } from "mongoose"; 
+import mongoose, { Schema } from "mongoose";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 
 const userSchema = new Schema({
-   name : {
-    type: String,
-    required: [true, "Name is required"],
-    lowercase: true,
-    trim: true
-   },
-   email : {
-    type: String,
-    unique: true,
-    lowercase: true,
-    trim: true,
-    required : [true,"Email is required"],
-   },
-   password: {
-    type: String,
-    required: [true,'Password is required'],  
-   },
-   role: {
-    type: String,
-    required: true,
-    enum: ["user", "admin"],
-    default: "user",
-   },
-    refreshToken :{
+    name: {
+        type: String,
+        required: [true, "Name is required"],
+        lowercase: true,
+        trim: true
+    },
+    email: {
+        type: String,
+        unique: true,
+        lowercase: true,
+        trim: true,
+        required: [true, "Email is required"],
+    },
+    password: {
+        type: String,
+        required: [true, 'Password is required'],
+    },
+    role: {
+        type: String,
+        required: true,
+        enum: ["user", "admin"],
+        default: "user",
+    },
+    refreshToken: {
         type: String
     },
 
+    // added by farman
+    referralCode: { type: String, unique: true, index: true },
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    points: { type: Number, default: 0 },
 
-},{timestamps: true})
+
+}, { timestamps: true })
 
 
 
-userSchema.pre("save",async function (next) {
- if (!this.isModified("password")) return;
+userSchema.pre("save", async function (next) {
+    if (!this.isModified("password")) return;
 
-  this.password = await bcrypt.hash(this.password, 10);
+    this.password = await bcrypt.hash(this.password, 10);
 })
 
-userSchema.methods.isPasswordCorrect = async function (password){
-    return await bcrypt.compare(password,this.password)
+userSchema.methods.isPasswordCorrect = async function (password) {
+    return await bcrypt.compare(password, this.password)
 }
 
 userSchema.methods.genearteAccessToken = function () {
     return jwt.sign({
-        _id : this._id,
-         name: this.name,
-         email: this.email,
-         role : this.role
+        _id: this._id,
+        name: this.name,
+        email: this.email,
+        role: this.role
     },
-     process.env.ACCESS_TOKEN_SECRET,
-     {
-        expiresIn: process.env.ACCESS_TOKEN_EXPIRY
-     })
+        process.env.ACCESS_TOKEN_SECRET,
+        {
+            expiresIn: process.env.ACCESS_TOKEN_EXPIRY
+        })
 }
 
-userSchema.methods.refreshAccessToken = function(){
+userSchema.methods.refreshAccessToken = function () {
     return jwt.sign({
         _id: this._id
     },
-    process.env.REFRESH_TOKEN_SECRET,
-    {
-        expiresIn: process.env.REFRESH_TOKEN_EXPIRY
-    }
-)
+        process.env.REFRESH_TOKEN_SECRET,
+        {
+            expiresIn: process.env.REFRESH_TOKEN_EXPIRY
+        }
+    )
 }
 
-const User = mongoose.model("User",userSchema);
+const User = mongoose.model("User", userSchema);
 export default User;
