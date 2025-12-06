@@ -3,7 +3,7 @@ import User from "../models/user.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import jwt from "jsonwebtoken";
 import { ApiResponse } from "../utils/ApiResponse.js";
-import { generateReferralCode } from "../utils/referral.js"; // added by farman
+import { generateReferralCode } from "../utils/referral.js";
 
 const genearteAccessTokenAndRefreshToken = async (userID) => {
     try {
@@ -22,7 +22,7 @@ const genearteAccessTokenAndRefreshToken = async (userID) => {
     }
 }
 const registerUser = asyncHandler(async (req, res) => {
-    const { name, email, password, role, ref } = req.body;  // added by farman
+    const { name, email, password, role, referral } = req.body;
     if (
         [name, email, password].some((field) => field?.trim() === "")
     ) {
@@ -33,7 +33,7 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "User already exists with this email");
     }
 
-    // added by farman
+
     let referralCode = generateReferralCode();
     while (await User.findOne({ referralCode })) {
         referralCode = generateReferralCode();
@@ -44,12 +44,12 @@ const registerUser = asyncHandler(async (req, res) => {
         email,
         password,
         role: role || "user",
-        referralCode        // added by farman
+        referralCode
     })
 
-    // added by farman
-    if (ref) {
-        const referrer = await User.findOne({ referralCode: ref });
+
+    if (referral) {
+        const referrer = await User.findOne({ referralCode: referral });
         if (referrer && String(referrer._id) !== String(user._id)) {
             user.referredBy = referrer._id;
             // award points to referrer (atomic-ish)
@@ -249,7 +249,7 @@ const getReferralLink = asyncHandler(async (req, res) => {
     // frontend URL where users will land (set this in .env)
     const baseUrl = process.env.CLIENT_URL || `${req.protocol}://${req.get("host")}`;
 
-    const referralLink = `${baseUrl}/register?ref=${user.referralCode}`;
+    const referralLink = `${baseUrl}/signup?referral=${user.referralCode}`;
 
     return res.status(200).json(
         new ApiResponse(200,

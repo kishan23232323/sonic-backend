@@ -10,6 +10,6 @@ userRouter.route("/refresh-token").post(refreshAccessToken)
 userRouter.route("/profile").get(authMiddleware, getCurrentUser)
 userRouter.route("/change-password").post(authMiddleware, changePassword)
 userRouter.route("/update-account").patch(authMiddleware, updateAccountDetails)
-userRouter.route("/referral-link").get(authMiddleware, getReferralLink); // added by farman
+userRouter.route("/referral-link").get(authMiddleware, getReferralLink);
 
 export default userRouter
